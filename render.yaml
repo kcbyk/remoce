@@ -1,14 +1,10 @@
 services:
   - type: web
     name: remoce-server
-    env: node
+    env: docker
     rootDir: server
-    buildCommand: npm install
-    startCommand: node index.js
     autoDeploy: true
     envVars:
-      - key: NODE_VERSION
-        value: 20
       - key: CORS_ORIGIN
         value: ""
       - key: SERP_API_KEY

@@ -3,6 +3,7 @@ const http = require('http');
 const https = require('https');
 const httpModule = require('http');
 const cors = require('cors');
+const { chromium } = require('playwright');
 const { Server } = require('socket.io');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
@@ -18,6 +19,57 @@ app.use(cors({
   },
   methods: ['GET', 'POST'],
 }));
+
+const remoteBrowsers = new Map();
+
+async function ensureRemoteBrowser(roomId, io) {
+  const existing = remoteBrowsers.get(roomId);
+  if (existing?.page && existing?.cdp && existing?.browser) return existing;
+
+  const viewport = { w: 1280, h: 720 };
+  const dpr = 1;
+  const browser = await chromium.launch({
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+    ],
+  });
+
+  const context = await browser.newContext({
+    viewport: { width: viewport.w, height: viewport.h },
+    deviceScaleFactor: dpr,
+  });
+  const page = await context.newPage();
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Page.enable');
+  await cdp.send('Runtime.enable');
+  await cdp.send('Page.startScreencast', { format: 'jpeg', quality: 60, maxWidth: viewport.w, maxHeight: viewport.h, everyNthFrame: 1 });
+
+  const state = { browser, context, page, cdp, viewport, dpr };
+  remoteBrowsers.set(roomId, state);
+
+  cdp.on('Page.screencastFrame', async (evt) => {
+    try {
+      io.to(roomId).emit('rb-frame', { data: evt.data, viewport, dpr });
+      await cdp.send('Page.screencastFrameAck', { sessionId: evt.sessionId });
+    } catch { }
+  });
+
+  return state;
+}
+
+async function closeRemoteBrowser(roomId) {
+  const s = remoteBrowsers.get(roomId);
+  remoteBrowsers.delete(roomId);
+  if (!s) return;
+  try { await s.cdp?.detach?.(); } catch { }
+  try { await s.context?.close?.(); } catch { }
+  try { await s.browser?.close?.(); } catch { }
+}
 
 // ===== PROXY ENDPOINT =====
 // iframe içinde açılamayan siteleri bypass eder
@@ -616,6 +668,83 @@ io.on('connection', (socket) => {
     if (other) io.to(other.id).emit('browser-page-action', { action, by: socket.id });
   });
 
+  socket.on('rb-open', async () => {
+    const roomId = socket.roomId;
+    const room = rooms[roomId];
+    if (!roomId || !room) return;
+    try {
+      const s = await ensureRemoteBrowser(roomId, io);
+      io.to(socket.id).emit('rb-session', { ok: true, viewport: s.viewport, dpr: s.dpr });
+    } catch (e) {
+      io.to(socket.id).emit('rb-session', { ok: false, message: e?.message || 'Remote browser error' });
+    }
+  });
+
+  socket.on('rb-close', async () => {
+    const roomId = socket.roomId;
+    if (!roomId) return;
+    await closeRemoteBrowser(roomId);
+    io.to(roomId).emit('rb-session', { ok: false, message: 'closed' });
+  });
+
+  socket.on('rb-navigate', async ({ url }) => {
+    const roomId = socket.roomId;
+    const room = rooms[roomId];
+    if (!roomId || !room) return;
+    const u = String(url || '').trim();
+    if (!u) return;
+    try {
+      const s = await ensureRemoteBrowser(roomId, io);
+      await s.page.goto(u, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => { });
+    } catch { }
+  });
+
+  socket.on('rb-input', async (payload) => {
+    const roomId = socket.roomId;
+    const room = rooms[roomId];
+    if (!roomId || !room) return;
+    try {
+      const s = await ensureRemoteBrowser(roomId, io);
+      const p = payload || {};
+      const x = Math.max(0, Math.min(Number(p.x) || 0, s.viewport.w));
+      const y = Math.max(0, Math.min(Number(p.y) || 0, s.viewport.h));
+      const button = p.button === 'right' ? 'right' : p.button === 'middle' ? 'middle' : 'left';
+
+      if (p.kind === 'move') {
+        await s.cdp.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, button, modifiers: 0 }).catch(() => { });
+      } else if (p.kind === 'down') {
+        await s.cdp.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button, clickCount: 1, modifiers: 0 }).catch(() => { });
+      } else if (p.kind === 'up') {
+        await s.cdp.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button, clickCount: 1, modifiers: 0 }).catch(() => { });
+      } else if (p.kind === 'wheel') {
+        const dx = Number(p.dx) || 0;
+        const dy = Number(p.dy) || 0;
+        await s.cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x, y, deltaX: dx, deltaY: dy, modifiers: 0 }).catch(() => { });
+      }
+    } catch { }
+  });
+
+  socket.on('rb-key', async (payload) => {
+    const roomId = socket.roomId;
+    const room = rooms[roomId];
+    if (!roomId || !room) return;
+    try {
+      const s = await ensureRemoteBrowser(roomId, io);
+      const p = payload || {};
+      if (p.kind === 'type' && typeof p.text === 'string' && p.text) {
+        await s.page.keyboard.insertText(p.text).catch(() => { });
+        return;
+      }
+      const key = String(p.key || '');
+      if (p.kind === 'down') {
+        if (key.length === 1 && !p.ctrl && !p.alt && !p.meta) return;
+        await s.page.keyboard.down(key).catch(() => { });
+      } else if (p.kind === 'up') {
+        await s.page.keyboard.up(key).catch(() => { });
+      }
+    } catch { }
+  });
+
   socket.on('browser-close', () => {
     const room = rooms[socket.roomId];
     if (!room) return;
@@ -623,6 +752,7 @@ io.on('connection', (socket) => {
     const other = room.users.find(usr => usr.id !== socket.id);
     if (other) io.to(other.id).emit('browser-close', { by: socket.id });
     console.log(`🌐 Browser kapatıldı: ${socket.roomId}`);
+    closeRemoteBrowser(socket.roomId);
   });
 
   // ===== YOUTUBE EŞ ZAMANLI =====
@@ -1184,7 +1314,11 @@ io.on('connection', (socket) => {
     if (room) {
       room.users = room.users.filter(u => u.id !== socket.id);
       if (room.gameState) { clearTimers(room.gameState); room.game = null; room.gameState = null; }
-      if (room.users.length === 0) { delete rooms[socket.roomId]; console.log(`🗑️ Oda silindi: ${socket.roomId}`); }
+      if (room.users.length === 0) {
+        closeRemoteBrowser(socket.roomId);
+        delete rooms[socket.roomId];
+        console.log(`🗑️ Oda silindi: ${socket.roomId}`);
+      }
       else { io.to(socket.roomId).emit('peer-left', { userId: socket.id }); updateRoomUsers(socket.roomId); }
     }
     console.log(`🚫 Ayrıldı: ${socket.id}`);

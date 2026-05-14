@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import RemoteBrowser from './RemoteBrowser';
 
 function isUrl(str) {
   return /^https?:\/\//i.test(str) || /^[\w-]+\.[\w.-]{2,}/i.test(str);
@@ -22,8 +23,6 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   const blockedTimerRef = useRef(null);
   const lastInitialUrlRef = useRef('');
   const infoTimerRef = useRef(null);
-  const iframeRef = useRef(null);
-  const remoteApplyRef = useRef(false);
 
   useEffect(() => {
     clearTimeout(blockedTimerRef.current);
@@ -33,7 +32,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     }
     blockedTimerRef.current = setTimeout(() => {
       if (mountedRef.current) setShowBlocked(true);
-    }, 7000);
+    }, 25000);
     return () => clearTimeout(blockedTimerRef.current);
   }, [phase, browseUrl, mode]);
 
@@ -47,9 +46,9 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
       if (u.startsWith('search:')) {
         const q = u.replace('search:', '');
         setSearchInput(q);
-        dosearch(q);
+        dosearch(q, false);
       } else if (u) {
-        goSite(u);
+        goSite(u, false);
       }
       setInfo('🔗 Rakip siteye gitti');
       clearTimeout(infoTimerRef.current);
@@ -61,8 +60,8 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
       if (u?.startsWith('search:')) {
         const q = u.replace('search:', '');
         setSearchInput(q);
-        dosearch(q);
-      } else if (u) goSite(u);
+        dosearch(q, false);
+      } else if (u) goSite(u, false);
     };
 
     const oninput = ({ text }) => {
@@ -102,11 +101,15 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   const goSite = useCallback((url, doemit = true) => {
     const u = isUrl(url) ? (url.startsWith('http') ? url : `https://${url}`) : null;
     if (!u) return;
-    setBrowseUrl(withBackend(`/proxy?url=${encodeURIComponent(u)}`));
+    setBrowseUrl(u);
     setMode('browse');
     setPhase('loading');
     setShowBlocked(false);
     if (doemit && socket) socket.emit('browser-navigate', { url: u });
+    if (socket) {
+      socket.emit('rb-open');
+      socket.emit('rb-navigate', { url: u });
+    }
   }, [socket]);
 
   useEffect(() => {
@@ -142,20 +145,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     }, 80);
   }, [socket]);
 
-  const getTargetUrl = useCallback(() => {
-    if (!browseUrl) return '';
-    try {
-      const u = new URL(browseUrl, window.location.href);
-      const raw = u.searchParams.get('url');
-      if (!raw) return '';
-      try { return decodeURIComponent(raw); } catch { return raw; }
-    } catch {
-      const raw = browseUrl.split('?')[1] || '';
-      const v = new URLSearchParams(raw).get('url');
-      if (!v) return '';
-      try { return decodeURIComponent(v); } catch { return v; }
-    }
-  }, [browseUrl]);
+  const getTargetUrl = useCallback(() => browseUrl, [browseUrl]);
 
   const openNewTab = useCallback(() => {
     const target = getTargetUrl();
@@ -164,100 +154,9 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     window.open(finalUrl, '_blank', 'noopener,noreferrer');
   }, [getTargetUrl]);
 
-  const resolveNodeFromPath = useCallback((doc, path) => {
-    if (!doc || !Array.isArray(path) || path.length === 0) return null;
-    let node = doc.documentElement;
-    for (let i = 1; i < path.length; i++) {
-      node = node?.childNodes?.[path[i]];
-      if (!node) return null;
-    }
-    return node;
-  }, []);
-
-  const applyRemoteAction = useCallback((action) => {
-    const iframe = iframeRef.current;
-    const win = iframe?.contentWindow;
-    const doc = iframe?.contentDocument;
-    if (!iframe || !win || !doc || !action) return;
-    remoteApplyRef.current = true;
-    try { win.__remoceMute = true; } catch { }
-    try {
-      if (action.kind === 'navigate') {
-        if (action.url && typeof action.url === 'string') goSite(action.url, false);
-        return;
-      }
-      if (action.kind === 'scroll') {
-        win.scrollTo(action.x || 0, action.y || 0);
-        return;
-      }
-      if (action.kind === 'input') {
-        const el = resolveNodeFromPath(doc, action.path);
-        if (el && el.focus) el.focus();
-        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-          el.value = String(action.value ?? '');
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          return;
-        }
-        if (el && el.isContentEditable) {
-          el.innerText = String(action.value ?? '');
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          return;
-        }
-        return;
-      }
-      if (action.kind === 'click') {
-        const el = resolveNodeFromPath(doc, action.path);
-        if (el && el.click) {
-          el.click();
-          return;
-        }
-        const cx = Number(action.cx);
-        const cy = Number(action.cy);
-        if (Number.isFinite(cx) && Number.isFinite(cy)) {
-          const fallback = doc.elementFromPoint(cx, cy);
-          if (fallback && fallback.click) fallback.click();
-        }
-      }
-    } finally {
-      setTimeout(() => {
-        remoteApplyRef.current = false;
-        try { win.__remoceMute = false; } catch { }
-      }, 50);
-    }
-  }, [goSite, resolveNodeFromPath]);
-
   useEffect(() => {
-    if (!socket) return;
-
-    const onPageAction = ({ action, by }) => {
-      if (by === myId) return;
-      if (mode !== 'browse') return;
-      applyRemoteAction(action);
-    };
-
-    socket.on('browser-page-action', onPageAction);
-    return () => socket.off('browser-page-action', onPageAction);
-  }, [socket, myId, mode, applyRemoteAction]);
-
-  useEffect(() => {
-    const onMsg = (e) => {
-      if (!socket) return;
-      const data = e?.data;
-      if (!data || data.source !== 'remoce' || data.type !== 'action') return;
-      if (remoteApplyRef.current) return;
-      const action = data.action;
-      if (!action || mode !== 'browse') return;
-      if (action.kind === 'navigate' && action.url && typeof action.url === 'string') {
-        goSite(action.url, true);
-        return;
-      }
-      if (action.kind === 'input' || action.kind === 'scroll' || action.kind === 'click') {
-        socket.emit('browser-page-action', { action });
-      }
-    };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
+    if (!socket || mode !== 'browse') return;
+    socket.emit('rb-open');
   }, [socket, mode]);
 
   const btnStyle = {
@@ -276,7 +175,6 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   };
 
   const targetUrl = getTargetUrl();
-  const is_blocked_site = mode === 'browse' && (targetUrl.includes('google.com') || targetUrl.includes('youtube.com') || targetUrl.includes('facebook.com') || targetUrl.includes('instagram.com') || targetUrl.includes('twitter.com') || targetUrl.includes('x.com') || targetUrl.includes('tiktok.com'));
 
   return (
     <div style={{ position: fullscreen ? 'fixed' : 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
@@ -301,7 +199,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
             </svg>
           )}
         </button>
-        <button onClick={() => { socket?.emit('browser-close'); onClose(); }} style={{ ...btnStyle, color: '#f87171' }}>
+        <button onClick={() => { socket?.emit('browser-close'); socket?.emit('rb-close'); onClose(); }} style={{ ...btnStyle, color: '#f87171' }}>
           <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -333,7 +231,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
             </div>
             {mode === 'results' && (
               <p style={{ color: '#64748b', fontSize: 11, textAlign: 'center', marginTop: 6 }}>
-                Sonuca tıkla → proxy ile açılır • URL gir → direkt siteye git
+                Sonuca tıkla → siteye git • URL gir → direkt siteye git
               </p>
             )}
           </div>
@@ -359,7 +257,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
                 ))}
               </div>
               <p style={{ color: '#475569', fontSize: 11, marginTop: 8 }}>
-                Google/YouTube gibi siteler yeni sekmede açılmalı (X-Frame engeli)
+                Bazı siteler yine de kısıtlayabilir; sorun olursa yeni sekmede aç
               </p>
             </div>
           )}
@@ -417,20 +315,6 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
             </div>
           </div>
 
-          {/* Engellenen site uyarısı */}
-          {is_blocked_site && (
-            <div style={{ position: 'absolute', top: 44, left: 0, right: 0, zIndex: 90, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '8px 16px', background: 'rgba(239,68,68,0.15)', borderBottom: '1px solid rgba(239,68,68,0.3)' }}>
-              <span style={{ color: '#fca5a5', fontSize: 11, textAlign: 'center' }}>
-                ⚠️ Bu site iframe içinde açılamaz —{' '}
-                <span
-                  onClick={openNewTab}
-                  style={{ color: '#60a5fa', textDecoration: 'underline', cursor: 'pointer' }}>
-                  yeni sekmede aç
-                </span>
-              </span>
-            </div>
-          )}
-
           {/* Yükleniyor */}
           {phase === 'loading' && !showBlocked && (
             <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0f172a', gap: 12, pointerEvents: 'none' }}>
@@ -446,9 +330,9 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
             <div style={{ position: 'absolute', inset: 0, zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,10,20,0.96)' }}>
               <div style={{ maxWidth: 300, margin: '0 16px', background: '#1e293b', borderRadius: 16, border: '1px solid rgba(255,255,255,0.08)', padding: 24, textAlign: 'center' }}>
                 <div style={{ fontSize: 40, marginBottom: 8 }}>🔒</div>
-                <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Site açılamıyor</div>
+                <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Tarayıcı yanıt vermiyor</div>
                 <div style={{ color: '#64748b', fontSize: 12, marginBottom: 16 }}>
-                  Bu site güvenlik nedeniyle iframe içinde açılmayı engelliyor.
+                  Sunucu tarafı tarayıcı yüklenemedi veya site çok ağır.
                 </div>
                 <button onClick={openNewTab} style={{ width: '100%', padding: 10, borderRadius: 10, background: '#3b82f6', color: '#fff', fontWeight: 600, fontSize: 14, border: 'none', cursor: 'pointer', marginBottom: 6 }}>
                   🔗 Yeni Sekmede Aç
@@ -460,19 +344,14 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
             </div>
           )}
 
-          {!is_blocked_site && (
-            <iframe
-              key={browseUrl}
-              src={browseUrl}
-              title="Tarayıcı"
-              style={{ width: '100%', height: '100%', border: 'none', display: 'block', paddingTop: 42, boxSizing: 'border-box', background: '#fff' }}
-              sandbox="allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads allow-pointer-lock"
-              allow="camera; microphone; fullscreen; autoplay; clipboard-read; clipboard-write; geolocation"
-              referrerPolicy="no-referrer-when-downgrade"
-              onLoad={() => { setPhase('ready'); setShowBlocked(false); }}
-              ref={iframeRef}
+          <div style={{ position: 'absolute', inset: 0, paddingTop: 42 }}>
+            <RemoteBrowser
+              socket={socket}
+              myId={myId}
+              visible={mode === 'browse'}
+              onReady={() => { setPhase('ready'); setShowBlocked(false); }}
             />
-          )}
+          </div>
         </div>
       )}
 
