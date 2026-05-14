@@ -1,0 +1,20 @@
+{
+  "name": "remoce-goruntulu-sohbet",
+  "version": "1.0.0",
+  "description": "WhatsApp benzeri görüntülü sohbet ve multiplayer bilmece oyunları",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js",
+    "server:legacy": "node server.js",
+    "qa": "node qa/qa-bot.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.4",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.7.4"
+  }
+}

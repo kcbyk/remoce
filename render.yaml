@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: remoce-server
+    env: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: node index.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: CORS_ORIGIN
+        value: ""
+      - key: SERP_API_KEY
+        value: ""
+      - key: MOJEEK_API_KEY
+        value: ""
+      - key: SCRAPINGBEE_KEY
+        value: ""
+      - key: SCRAPINGANT_KEYS
+        value: ""
