@@ -179,7 +179,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   return (
     <div style={{ position: fullscreen ? 'fixed' : 'absolute', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', background: '#0f172a' }}>
       {/* Sağ üst butonlar */}
-      <div style={{ position: 'absolute', top: 12, right: 12, zIndex: 200, display: 'flex', gap: 8, pointerEvents: 'auto' }}>
+      <div style={{ position: 'absolute', top: 'calc(env(safe-area-inset-top) + 12px)', right: 'calc(env(safe-area-inset-right) + 12px)', zIndex: 200, display: 'flex', gap: 8, pointerEvents: 'auto' }}>
         {info && <span style={{ fontSize: 11, color: '#7dd3fc', background: 'rgba(0,0,0,0.7)', padding: '4px 10px', borderRadius: 8 }}>{info}</span>}
         {mode === 'browse' && !!browseUrl && (
           <button onClick={openNewTab} style={btnStyle} title="Yeni sekmede aç">

@@ -197,7 +197,8 @@ export default function CallRoom({
           tabIndex={0}
           aria-label="Kamera penceresi"
           onClick={() => setPipExpanded(v => !v)}
-          className={`fixed z-[300] right-4 bottom-24 rounded-2xl overflow-hidden shadow-2xl border-2 border-white/30 cursor-pointer active:scale-95 transition-all ${pipExpanded ? 'w-52 h-64 sm:w-60 sm:h-72' : 'w-28 h-36 sm:w-32 sm:h-44'}`}
+          className={`fixed z-[300] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/30 cursor-pointer active:scale-95 transition-all ${pipExpanded ? 'w-52 h-64 sm:w-60 sm:h-72' : 'w-28 h-36 sm:w-32 sm:h-44'}`}
+          style={{ right: 'calc(env(safe-area-inset-right) + 1rem)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}
           title="Tıkla: büyüt/küçült">
           {localBig ? (
             remoteStream ? (

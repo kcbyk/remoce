@@ -20,6 +20,8 @@ app.use(cors({
   methods: ['GET', 'POST'],
 }));
 
+app.get('/health', (req, res) => res.json({ ok: true }));
+
 const remoteBrowsers = new Map();
 
 async function ensureRemoteBrowser(roomId, io) {
