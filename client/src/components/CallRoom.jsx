@@ -197,10 +197,10 @@ export default function CallRoom({
           role="button"
           tabIndex={0}
           aria-label="Kamera penceresi"
-          onClick={() => setPipExpanded(v => !v)}
+          onClick={() => setLocalBig(b => !b)}
           className={`fixed z-[300] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/30 cursor-pointer active:scale-95 transition-all bg-black ${pipExpanded ? 'w-64 h-40 sm:w-72 sm:h-44' : 'w-40 h-24 sm:w-44 sm:h-28'}`}
           style={{ right: 'calc(env(safe-area-inset-right) + 1rem)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}
-          title="Tıkla: büyüt/küçült">
+          title="Tikla: tam ekran kamerayi degistir">
           {localBig ? (
             remoteStream ? (
               <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ objectPosition: 'center 38%' }} />
@@ -222,6 +222,20 @@ export default function CallRoom({
               </div>
             )
           )}
+          <button
+            onClick={(e) => { e.stopPropagation(); setPipExpanded(v => !v); }}
+            className="absolute top-1 left-1 w-7 h-7 rounded-full bg-black/45 flex items-center justify-center"
+            title={pipExpanded ? 'Kucult' : 'Buyut'}>
+            {pipExpanded ? (
+              <svg className="w-4 h-4 text-white/75" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 9H4.5M9 9V4.5M15 9h4.5M15 9V4.5M9 15v4.5M9 15H4.5M15 15h4.5M15 15v4.5" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 text-white/75" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 8.25v-4.5m0 0h4.5m-4.5 0L9 9m11.25-.75v-4.5m0 0h-4.5m4.5 0L15 9M3.75 15.75v4.5m0 0h4.5m-4.5 0L9 15m11.25.75v4.5m0 0h-4.5m4.5 0L15 15" />
+              </svg>
+            )}
+          </button>
           {!camEnabled && !localBig && (
             <div className="absolute inset-0 bg-gray-900/80 flex items-center justify-center">
               <svg className="w-6 h-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -232,14 +246,14 @@ export default function CallRoom({
           <button
             onClick={(e) => { e.stopPropagation(); setLocalBig(b => !b); }}
             className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/40 flex items-center justify-center"
-            title="Kamera değiştir">
+            title="Tam ekran kamerayi degistir">
             <svg className="w-4 h-4 text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
             </svg>
           </button>
           <div className="absolute bottom-1 left-0 right-0 text-center pointer-events-none">
             <span className="text-white/80 text-[9px] font-medium bg-black/40 px-1 py-0.5 rounded">
-              {localBig ? 'Rakip' : username}
+              {localBig ? 'Rakip' : username} - tikla
             </span>
           </div>
         </div>

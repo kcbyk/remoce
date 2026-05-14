@@ -737,8 +737,11 @@ io.on('connection', (socket) => {
     if (!u) return;
     try {
       const s = await ensureRemoteBrowser(roomId, io);
-      await s.page.goto(u, { waitUntil: 'domcontentloaded', timeout: 45000 }).catch(() => { });
-    } catch { }
+      await s.page.goto(u, { waitUntil: 'commit', timeout: 20000 }).catch(() => { });
+      io.to(roomId).emit('rb-navigated', { ok: true, url: u });
+    } catch (e) {
+      io.to(socket.id).emit('rb-navigated', { ok: false, url: u, message: e?.message || 'Navigation failed' });
+    }
   });
 
   socket.on('rb-input', async (payload) => {

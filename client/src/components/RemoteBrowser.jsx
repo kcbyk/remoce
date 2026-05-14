@@ -12,6 +12,7 @@ export default function RemoteBrowser({ socket, myId, visible, onReady }) {
   const keysRef = useRef(null);
   const pointersRef = useRef(new Map());
   const lastTouchMidRef = useRef(null);
+  const readyRef = useRef(false);
 
   const [connected, setConnected] = useState(false);
   const [status, setStatus] = useState('Bağlanıyor...');
@@ -28,10 +29,12 @@ export default function RemoteBrowser({ socket, myId, visible, onReady }) {
       if (!ok) {
         setStatus(message || 'Tarayıcı oturumu başlatılamadı');
         setConnected(false);
+        readyRef.current = false;
         if (onReady) onReady(false);
         return;
       }
       setConnected(true);
+      readyRef.current = true;
       setStatus('');
       if (viewport?.w && viewport?.h) setVp({ w: viewport.w, h: viewport.h });
       if (typeof rdpr === 'number') setDpr(rdpr);
@@ -44,7 +47,12 @@ export default function RemoteBrowser({ socket, myId, visible, onReady }) {
 
   useEffect(() => {
     if (!socket || !visible) return;
+    readyRef.current = false;
     socket.emit('rb-open');
+    const timer = setInterval(() => {
+      if (!readyRef.current) socket.emit('rb-open');
+    }, 3000);
+    return () => clearInterval(timer);
   }, [socket, visible]);
 
   useEffect(() => {
@@ -60,6 +68,12 @@ export default function RemoteBrowser({ socket, myId, visible, onReady }) {
         const w = viewport?.w || vp.w;
         const h = viewport?.h || vp.h;
         lastFrameRef.current = { img, w, h };
+        if (!readyRef.current) {
+          readyRef.current = true;
+          setConnected(true);
+          setStatus('');
+          if (onReady) onReady(true);
+        }
       };
       img.src = `data:image/jpeg;base64,${data}`;
     };

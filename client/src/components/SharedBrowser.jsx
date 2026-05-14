@@ -19,6 +19,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   const [showBlocked, setShowBlocked] = useState(false);
   const [info, setInfo] = useState('');
   const [fullscreen, setFullscreen] = useState(false);
+  const [browserReady, setBrowserReady] = useState(false);
   const mountedRef = useRef(true);
   const syncRef = useRef(null);
   const blockedTimerRef = useRef(null);
@@ -33,7 +34,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     }
     blockedTimerRef.current = setTimeout(() => {
       if (mountedRef.current) setShowBlocked(true);
-    }, 25000);
+    }, 60000);
     return () => clearTimeout(blockedTimerRef.current);
   }, [phase, browseUrl, mode]);
 
@@ -119,11 +120,8 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     setMode('browse');
     setPhase('loading');
     setShowBlocked(false);
+    setBrowserReady(false);
     if (doemit && socket) socket.emit('browser-navigate', { url: u });
-    if (socket) {
-      socket.emit('rb-open');
-      socket.emit('rb-navigate', { url: u });
-    }
   }, [socket]);
 
   useEffect(() => {
@@ -171,7 +169,38 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   useEffect(() => {
     if (!socket || mode !== 'browse') return;
     socket.emit('rb-open');
-  }, [socket, mode]);
+  }, [socket, mode, browseUrl]);
+
+  useEffect(() => {
+    if (!socket || mode !== 'browse' || !browseUrl || !browserReady) return;
+    setPhase('loading');
+    setShowBlocked(false);
+    socket.emit('rb-navigate', { url: browseUrl });
+  }, [socket, mode, browseUrl, browserReady]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const onNavigated = ({ url, ok }) => {
+      if (!mountedRef.current || url !== browseUrl) return;
+      if (ok) {
+        setPhase('ready');
+        setShowBlocked(false);
+      }
+    };
+    socket.on('rb-navigated', onNavigated);
+    return () => socket.off('rb-navigated', onNavigated);
+  }, [socket, browseUrl]);
+
+  const handleRemoteReady = useCallback((ok) => {
+    if (!mountedRef.current) return;
+    if (!ok) {
+      setBrowserReady(false);
+      return;
+    }
+    setBrowserReady(true);
+    setPhase('ready');
+    setShowBlocked(false);
+  }, []);
 
   const btnStyle = {
     width: 36,
@@ -366,7 +395,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
               socket={socket}
               myId={myId}
               visible={mode === 'browse'}
-              onReady={() => { setPhase('ready'); setShowBlocked(false); }}
+              onReady={handleRemoteReady}
             />
           </div>
         </div>
