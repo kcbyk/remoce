@@ -161,7 +161,7 @@ export default function CallRoom({
         localStream ? (
           <video ref={localVideoRef} autoPlay muted playsInline
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ transform: 'scaleX(-1)' }} /* Mirror — selfie gibi */
+            style={{ transform: 'scaleX(-1)', objectPosition: 'center 38%' }} /* Mirror: selfie preview */
           />
         ) : (
           <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
@@ -172,7 +172,8 @@ export default function CallRoom({
         /* Uzak kamera büyük */
         remoteStream ? (
           <video ref={remoteVideoRef} autoPlay playsInline
-            className="absolute inset-0 w-full h-full object-cover" />
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ objectPosition: 'center 38%' }} />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
             <div className="text-center">
@@ -197,12 +198,12 @@ export default function CallRoom({
           tabIndex={0}
           aria-label="Kamera penceresi"
           onClick={() => setPipExpanded(v => !v)}
-          className={`fixed z-[300] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/30 cursor-pointer active:scale-95 transition-all ${pipExpanded ? 'w-52 h-64 sm:w-60 sm:h-72' : 'w-28 h-36 sm:w-32 sm:h-44'}`}
+          className={`fixed z-[300] rounded-2xl overflow-hidden shadow-2xl border-2 border-white/30 cursor-pointer active:scale-95 transition-all bg-black ${pipExpanded ? 'w-64 h-40 sm:w-72 sm:h-44' : 'w-40 h-24 sm:w-44 sm:h-28'}`}
           style={{ right: 'calc(env(safe-area-inset-right) + 1rem)', bottom: 'calc(env(safe-area-inset-bottom) + 6rem)' }}
           title="Tıkla: büyüt/küçült">
           {localBig ? (
             remoteStream ? (
-              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+              <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ objectPosition: 'center 38%' }} />
             ) : (
               <div className="w-full h-full bg-gray-800 flex items-center justify-center">
                 <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -212,7 +213,7 @@ export default function CallRoom({
             )
           ) : (
             localStream ? (
-              <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)' }} />
+              <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" style={{ transform: 'scaleX(-1)', objectPosition: 'center 38%' }} />
             ) : (
               <div className="w-full h-full bg-gray-800 flex items-center justify-center">
                 <svg className="w-8 h-8 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

@@ -12,7 +12,12 @@ export function useWebRTC(socket, myId) {
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          aspectRatio: { ideal: 16 / 9 },
+          facingMode: 'user',
+        },
         audio: true,
       });
       localStreamRef.current = stream;

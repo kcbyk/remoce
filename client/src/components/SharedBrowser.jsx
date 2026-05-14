@@ -13,6 +13,7 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
   const [searchInput, setSearchInput] = useState('');
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState('');
   const [browseUrl, setBrowseUrl] = useState('');
   const [phase, setPhase] = useState('loading');
   const [showBlocked, setShowBlocked] = useState(false);
@@ -90,11 +91,24 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
     setMode('results');
     setSearching(true);
     setResults([]);
+    setSearchError('');
     try {
       const res = await fetch(withBackend(`/search?q=${encodeURIComponent(q.trim())}`));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (mountedRef.current) setResults(data.results || []);
-    } catch {}
+    } catch {
+      if (mountedRef.current) {
+        setSearchError('Arama sunucusuna baglanilamadi. Direkt arama sayfasini acabilirsin.');
+        setResults([
+          {
+            title: `DuckDuckGo'da ara: ${q.trim()}`,
+            url: `https://duckduckgo.com/?q=${encodeURIComponent(q.trim())}`,
+            desc: 'Arama sonuclarini paylasimli tarayicida ac.',
+          },
+        ]);
+      }
+    }
     if (mountedRef.current) setSearching(false);
   }, [socket]);
 
@@ -275,6 +289,9 @@ export default function SharedBrowser({ socket, myId, localStream, initialUrl, o
               )}
               {!searching && results.length === 0 && (
                 <p style={{ color: '#475569', textAlign: 'center', paddingTop: 40, fontSize: 13 }}>Sonuç bulunamadı</p>
+              )}
+              {!searching && searchError && (
+                <p style={{ color: '#f87171', textAlign: 'center', padding: '12px 0 16px', fontSize: 12 }}>{searchError}</p>
               )}
               <div style={{ maxWidth: 600, margin: '0 auto' }}>
                 {results.map((r, i) => (

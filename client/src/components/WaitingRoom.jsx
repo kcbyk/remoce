@@ -27,6 +27,7 @@ export default function WaitingRoom({ roomId, username, localStream, users, onLe
         muted
         playsInline
         className="absolute inset-0 w-full h-full object-cover scale-110 blur-sm"
+        style={{ transform: 'scaleX(-1)', objectPosition: 'center 38%' }}
       />
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -86,6 +87,7 @@ export default function WaitingRoom({ roomId, username, localStream, users, onLe
             muted
             playsInline
             className="w-full h-full object-cover"
+            style={{ transform: 'scaleX(-1)', objectPosition: 'center 38%' }}
           />
           <div className="absolute bottom-2 left-2 glass rounded-lg px-2 py-1 text-xs text-white/80">
             {username}

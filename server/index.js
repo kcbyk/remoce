@@ -345,11 +345,51 @@ function ddgFallback(q, res) {
             });
           }
         });
+        if (results.length === 0) {
+          results.push(
+            {
+              title: `DuckDuckGo'da ara: ${q}`,
+              url: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+              desc: 'Arama motoru sonuc sayfasini paylasimli tarayicida ac.',
+              thumb: '',
+            },
+            {
+              title: `Bing'de ara: ${q}`,
+              url: `https://www.bing.com/search?q=${encodeURIComponent(q)}&mkt=tr-TR`,
+              desc: 'Alternatif arama sonuc sayfasini ac.',
+              thumb: '',
+            },
+          );
+        }
         console.log(`🦆 DDG fallback: "${q}" → ${results.length} sonuç`);
         res.json({ results: results.slice(0, 15), query: q, engine: 'duckduckgo' });
-      } catch { res.json({ results: [], query: q, engine: 'duckduckgo' }); }
+      } catch {
+        res.json({
+          results: [
+            {
+              title: `DuckDuckGo'da ara: ${q}`,
+              url: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+              desc: 'Arama motoru sonuc sayfasini paylasimli tarayicida ac.',
+              thumb: '',
+            },
+          ],
+          query: q,
+          engine: 'duckduckgo',
+        });
+      }
     });
-  }).on('error', () => res.json({ results: [], query: q, engine: 'none' }));
+  }).on('error', () => res.json({
+    results: [
+      {
+        title: `DuckDuckGo'da ara: ${q}`,
+        url: `https://duckduckgo.com/?q=${encodeURIComponent(q)}`,
+        desc: 'Arama motoru sonuc sayfasini paylasimli tarayicida ac.',
+        thumb: '',
+      },
+    ],
+    query: q,
+    engine: 'none',
+  }));
 }
 
 const io = new Server(server, {
